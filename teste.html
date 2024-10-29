@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Exercícios Práticos</title>
+    <style>
+        #editorContainer { width: 80%; height: 400px; margin: 20px auto; border: 1px solid #ccc; }
+        #controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 0 20%; }
+        button { padding: 10px; }
+        #timer { font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Exercícios de Programação com Verificação Automática</h1>
+    <p id="exercise">Carregando exercício...</p>
+    <div id="editorContainer"></div>
+    
+    <div id="controls">
+        <span id="timer">15:00</span>
+        <button id="submitButton">Enviar Código</button>
+    </div>
+
+    <!-- Importando o Monaco Editor -->
+    <script src="https://unpkg.com/monaco-editor@0.34.1/min/vs/loader.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+    <script type="module">
+      import { GoogleGenerativeAI } from "@google/generative-ai";
+
+      // Acesse sua chave de API
+      const API_KEY = "AIzaSyBfJrzeRAPn1aJOsHJyhdfNcxkOaKJJgOk"; // Substitua pela sua chave de API
+      const genAI = new GoogleGenerativeAI(API_KEY);
+
+      require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.34.1/min/vs' }});
+      require(['vs/editor/editor.main'], function () {
+          window.editor = monaco.editor.create(document.getElementById('editorContainer'), {
+              value: "// Escreva seu código aqui\n",
+              language: 'javascript',
+              theme: 'vs-dark',
+          });
+          generateExercise();  // Gera o exercício inicial
+
+          // Adiciona o listener para o botão de enviar
+          document.getElementById("submitButton").addEventListener("click", submitCode);
+      });
+
+      let time = 15 * 60;
+      const timerElement = document.getElementById("timer");
+      
+      function startTimer() {
+          const interval = setInterval(() => {
+              const minutes = Math.floor(time / 60);
+              const seconds = time % 60;
+              timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+              time--;
+              
+              if (time < 0) {
+                  clearInterval(interval);
+                  alert("Tempo esgotado!");
+                  generateExercise();  // Gera um novo exercício se o tempo acabar
+              }
+          }, 1000);
+      }
+      
+      startTimer();
+
+      // Função para gerar um novo exercício
+      async function generateExercise() {
+          const prompt = "Crie um exercício de programação para o aluno praticar com JavaScript ou Python. O exercicio deve ser algo de iniciante. não passe de 40 caracteres para explicar";
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+          try {
+              const result = await model.generateContent(prompt);
+              
+              // Log da resposta para verificar a estrutura
+              console.log("Resultado da API:", result);
+              
+              // Acesse a estrutura de resposta correta
+              if (result && result.response && result.response.candidates && result.response.candidates.length > 0 && result.response.candidates[0].content.parts.length > 0) {
+                  const exerciseText = result.response.candidates[0].content.parts[0].text;
+                  document.getElementById("exercise").textContent = exerciseText;
+              } else {
+                  throw new Error("Estrutura de resposta inválida.");
+              }
+          } catch (error) {
+              console.error("Erro ao gerar exercício:", error);
+              document.getElementById("exercise").textContent = "Erro ao obter o exercício. Tente novamente.";
+          }
+          window.editor.setValue("// Escreva seu código aqui\n");
+          time = 15 * 60;  // Reinicia o temporizador
+      }
+
+      // Função para enviar o código para avaliação
+      async function submitCode() {
+          const userCode = window.editor.getValue();
+          const exercisePrompt = document.getElementById("exercise").textContent;
+          const feedbackPrompt = `Verifique se o código abaixo resolve o seguinte exercício: ${exercisePrompt}. \n\nCódigo do usuário:\n${userCode}`;
+          
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+          try {
+              const result = await model.generateContent(feedbackPrompt);
+              
+              // Log da resposta para verificar a estrutura
+              console.log("Resultado da API ao avaliar código:", result);
+              
+              // Acesse a estrutura de resposta correta
+              if (result && result.response && result.response.candidates && result.response.candidates.length > 0 && result.response.candidates[0].content.parts.length > 0) {
+                  const feedback = result.response.candidates[0].content.parts[0].text;
+
+                  if (feedback.includes("correto")) {
+                      alert("Parabéns! Você completou o exercício corretamente.");
+                      generateExercise();  // Gera um novo exercício
+                  } else {
+                      alert("Tente novamente. Feedback: " + feedback);
+                  }
+              } else {
+                  throw new Error("Estrutura de resposta inválida ao avaliar o código.");
+              }
+          } catch (error) {
+              console.error("Erro ao avaliar o código:", error);
+              alert("Erro ao avaliar o código. Tente novamente.");
+          }
+      }
+    </script>
+</body>
+</html>
